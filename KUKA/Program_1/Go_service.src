@@ -1,0 +1,22 @@
+&ACCESS RVO1
+&COMMENT 
+&ACCESS RVO
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\Program\program_1
+DEF Go_service()
+
+; first move to the home point
+Go_home()
+Home_Pos = TRUE
+
+; then move to service position (needs to be taught)
+;FOLD LIN P1  Vel=1 m/s CPDAT0 Tool[2]:tool_empty Base[0];%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P1, 3:, 5:1, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP1
+BAS(#CP_PARAMS,1)
+LIN XP1 
+;ENDFOLD
+Maint_Pos = TRUE
+END

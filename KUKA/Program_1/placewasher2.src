@@ -1,0 +1,94 @@
+&ACCESS RVO1
+&COMMENT 
+&ACCESS RVP
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\Program
+DEF placewasher2(current_box_layer2:in, Z_pallet:in)
+decl int current_box_layer2 ;number of the current layer of boxes at place 1
+DECL INT Z_pallet
+DECL pos puklwasher, retreat_1_point
+
+; check if there is a requirement to enter the zone from the operator
+IF (Entry_Request) THEN
+Go_home()
+BRAKE
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+HALT
+ENDIF
+
+; movement down in the direction to the pallet place point
+;FOLD LIN P1  Vel=2 m/s CPDAT0 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P1, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP1
+BAS(#CP_PARAMS,2)
+LIN XP1 
+;ENDFOLD
+
+; movement to the point above the pallet place point
+;FOLD LIN P2 CONT Vel=2.00000 m/s CPDAT2 Tool[4]:tool_pallet Base[5]:plpallet2;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT2
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT2
+FDAT_ACT=FP2
+BAS(#CP_PARAMS,2.00000)
+LIN XP2 C_DIS C_DIS
+;ENDFOLD
+
+; coordinates calculation and movement down to place point
+xpuklwasher = XP3
+xpuklwasher.z = xpuklwasher.z + Z_pallet * (current_box_layer2 - 1)
+
+;FOLD LIN puklpallet  Vel=2 m/s CPDAT1 Tool[4]:tool_pallet Base[5]:plpallet2;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:puklpallet, 3:, 5:2, 7:CPDAT1
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT1
+FDAT_ACT=Fpuklpallet
+BAS(#CP_PARAMS,2)
+LIN Xpuklpallet 
+;ENDFOLD
+
+;FOLD OUT 7 'Vacuum_on'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:7, 3:Vacuum_on, 5:FALSE, 6:
+
+$OUT[7]=FALSE
+;ENDFOLD
+;FOLD OUT 8 'Blow'  State= TRUE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:8, 3:Blow, 5:TRUE, 6:
+
+$OUT[8]=TRUE
+;ENDFOLD
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+;FOLD OUT 8 'Blow'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:8, 3:Blow, 5:FALSE, 6:
+
+$OUT[8]=FALSE
+;ENDFOLD
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+;FOLD OUT 6 'Vacuum_cups'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:6, 3:Vacuum_cups, 5:FALSE, 6:
+
+$OUT[6]=FALSE
+;ENDFOLD
+
+xpuklwasher.z = xpuklwasher.z + 400
+
+; movement up
+;FOLD LIN puklwasher CONT Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[5]:plpallet2;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:puklwasher, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=Fpuklwasher
+BAS(#CP_PARAMS,2.00000)
+LIN Xpuklwasher C_DIS C_DIS
+;ENDFOLD
+
+;FOLD PTP home  Vel=100 % PDAT5 Tool[2]:tool_empty Base[0];%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:home, 3:, 5:100, 7:PDAT5
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT5
+FDAT_ACT=Fhome
+BAS(#PTP_PARAMS,100)
+PTP Xhome 
+;ENDFOLD
+
+END

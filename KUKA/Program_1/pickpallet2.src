@@ -1,0 +1,317 @@
+&ACCESS RVO1
+&COMMENT 
+&ACCESS RVP
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\Program
+DEF pickpallet2(pallet1_num:in, Z_pallet:in)
+decl pos poz_vz_pal
+decl int pallet1_num, ip, Z_pallet
+DECL REAL low_z_pallet_pick
+decl pos actual_pick_point_1, pallet_pick_point, prp1, prp2, prp9, prp4, prp5
+
+low_z_pallet_pick = 20 ; mm, Z coordinate of the bottom of the first pallet at the pallet pick place
+ 
+; rotation to the pallet pick place
+;FOLD PTP P1  Vel=100 % PDAT1 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:P1, 3:, 5:100, 7:PDAT1
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT1
+FDAT_ACT=FP1
+BAS(#PTP_PARAMS,100)
+PTP XP1 
+;ENDFOLD
+
+if ((pallet1_num == 10) or (FLAG[5] == FALSE)) then
+; movement to the top with search
+
+; rising up
+;FOLD LIN P2  Vel=2.00000 m/s CPDAT2 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2, 3:, 5:2.00000, 7:CPDAT2
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT2
+FDAT_ACT=FP2
+BAS(#CP_PARAMS,2.00000)
+LIN XP2 
+;ENDFOLD
+
+; taking air in order not to avoid the hooks opening 
+;FOLD SYN OUT 1 'Finger_right'  State= TRUE  at END  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:1, 3:Finger_right, 5:TRUE, 7:1, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=1 DELAY=1500 DO $OUT[1]=TRUE
+;ENDFOLD
+;FOLD SYN OUT 3 'Finger_left'  State= TRUE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:3, 3:Finger_left, 5:TRUE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[3]=TRUE
+;ENDFOLD
+
+; opening the hooks
+;FOLD SYN OUT 5 'All_hooks'  State= TRUE  at END  Delay= 500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:5, 3:All_hooks, 5:TRUE, 7:1, 9:0, 12:500
+TRIGGER WHEN DISTANCE=1 DELAY=500 DO $OUT[5]=TRUE
+;ENDFOLD
+
+; moving to the point above pallet pick place
+;FOLD LIN P3  Vel=2.00000 m/s CPDAT3 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P3, 3:, 5:2.00000, 7:CPDAT3
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT3
+FDAT_ACT=FP3
+BAS(#CP_PARAMS,2.00000)
+LIN XP3 
+;ENDFOLD
+
+; stop preprocessor
+$ADVANCE = 0
+
+ip = 0
+; checking signals from the sensor at the trajectory 
+INTERRUPT DECL 11 WHEN ((Appr_sensor_signal_1) AND (Appr_sensor_signal_2))  DO STOP (pallet_pick_point, ip)
+INTERRUPT ON 11 ; interrupt turn on
+
+; checking signals from the sensor at the trajectory 
+;FOLD LIN P4  Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P4, 3:, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2.00000)
+LIN XP4 
+;ENDFOLD
+
+; interrupt turn off
+INTERRUPT OFF 11
+
+IF ip == 1 THEN
+pallet_pick_point.z = pallet_pick_point.z - 20 ; if pallet was found than pulling down to if after the event when the sensor had found it
+ELSE
+pallet_pick_point = XP4
+ENDIF
+
+pallet1_num = (low_z_pallet_pick + pallet_pick_point.z) / Z_pallet ; calculation of number of pallets
+
+; sinking to the pick point
+;FOLD LIN pallet_pick_point  Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:pallet_pick_point, 3:, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2.00000)
+LIN Xpallet_pick_point 
+;ENDFOLD
+
+; movement relative to the actual_pick_point_1 to the defined length down
+;FOLD OUT 5 'all hooks'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:5, 3:all hooks, 5:FALSE, 6:
+
+$OUT[5]=FALSE
+;ENDFOLD
+
+; start preprocessor
+$ADVANCE = 3
+
+prp1 = pallet_pick_point
+prp1.z = prp1.z + 200 ; rising up to the defined length
+
+;FOLD LIN prp1 CONT Vel=2.00000 m/s CPDAT5 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:prp1, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT5
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT5
+FDAT_ACT=Fprp1
+BAS(#CP_PARAMS,2.00000)
+LIN Xprp1 C_DIS C_DIS
+;ENDFOLD
+
+;calculation of the coordinates of the retreat points
+XP5.z = pallet_pick_point.z
+XP6.z = pallet_pick_point.z
+
+; retreat to the approach points
+;FOLD LIN P5 CONT Vel=2.00000 m/s CPDAT5 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P5, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT5
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT5
+FDAT_ACT=FP5
+BAS(#CP_PARAMS,2.00000)
+LIN XP5 C_DIS C_DIS
+;ENDFOLD
+;FOLD PTP P6 CONT Vel=100 % PDAT6 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:P6, 3:C_PTP, 5:100, 7:PDAT6
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT6
+FDAT_ACT=FP6
+BAS(#PTP_PARAMS,100)
+PTP XP6 C_PTP
+;ENDFOLD
+
+
+
+ELSE
+if ((pallet1_num > 5) and (FLAG[5] == TRUE)) then
+; movement along the calculated coordinateswithout search along the upper trajectory
+
+; rising up
+;FOLD LIN P2  Vel=2.00000 m/s CPDAT2 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2, 3:, 5:2.00000, 7:CPDAT2
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT2
+FDAT_ACT=FP2
+BAS(#CP_PARAMS,2.00000)
+LIN XP2 
+;ENDFOLD
+
+; taking air in order not to avoid the hooks opening 
+;FOLD SYN OUT 1 'Finger_right'  State= TRUE  at END  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:1, 3:Finger_right, 5:TRUE, 7:1, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=1 DELAY=1500 DO $OUT[1]=TRUE
+;ENDFOLD
+;FOLD SYN OUT 3 'Finger_left'  State= TRUE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:3, 3:Finger_left, 5:TRUE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[3]=TRUE
+;ENDFOLD
+
+; opening the hooks
+;FOLD SYN OUT 5 'All_hooks'  State= TRUE  at END  Delay= 500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:5, 3:All_hooks, 5:TRUE, 7:1, 9:0, 12:500
+TRIGGER WHEN DISTANCE=1 DELAY=500 DO $OUT[5]=TRUE
+;ENDFOLD
+
+; moving to the point above pallet pick place
+;FOLD LIN P3  Vel=2.00000 m/s CPDAT3 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P3, 3:, 5:2.00000, 7:CPDAT3
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT3
+FDAT_ACT=FP3
+BAS(#CP_PARAMS,2.00000)
+LIN XP3 
+;ENDFOLD
+
+pallet_pick_point = XP4
+pallet_pick_point.z = pallet1_num * Z_pallet - low_z_pallet_pick ; calculation of the pick point coordinates according to number of pallets
+
+; sinking to the pick point
+;FOLD LIN pallet_pick_point  Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:pallet_pick_point, 3:, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2.00000)
+LIN Xpallet_pick_point 
+;ENDFOLD
+
+; movement relative to the actual_pick_point_1 to the defined length down
+;FOLD OUT 5 'all hooks'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:5, 3:all hooks, 5:FALSE, 6:
+
+$OUT[5]=FALSE
+;ENDFOLD
+
+prp1 = pallet_pick_point
+prp1.z = prp1.z + 200 ; rising up to the defined length
+
+;FOLD LIN prp1 CONT Vel=2.00000 m/s CPDAT5 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:prp1, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT5
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT5
+FDAT_ACT=Fprp1
+BAS(#CP_PARAMS,2.00000)
+LIN Xprp1 C_DIS C_DIS
+;ENDFOLD
+
+;calculation of the coordinates of the retreat points
+XP5.z = pallet_pick_point.z
+XP6.z = pallet_pick_point.z
+
+; retreat to the approach points
+;FOLD LIN P5 CONT Vel=2.00000 m/s CPDAT5 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P5, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT5
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT5
+FDAT_ACT=FP5
+BAS(#CP_PARAMS,2.00000)
+LIN XP5 C_DIS C_DIS
+;ENDFOLD
+;FOLD PTP P6 CONT Vel=100 % PDAT6 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:P6, 3:C_PTP, 5:100, 7:PDAT6
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT6
+FDAT_ACT=FP6
+BAS(#PTP_PARAMS,100)
+PTP XP6 C_PTP
+;ENDFOLD
+
+
+
+Else
+If ((pallet1_num < 5) and (FLAG[5]== TRUE)) then
+; movement along the calculated coordinateswithout search along the lower trajectory
+
+prp2 = XP2
+prp3 = XP3
+prp2.z = prp2.z - 200
+prp3.z = prp3.z - 200
+
+
+; rising up
+;FOLD LIN prp2  Vel=2.00000 m/s CPDAT2 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:prp2, 3:, 5:2.00000, 7:CPDAT2
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT2
+FDAT_ACT=FP2
+BAS(#CP_PARAMS,2.00000)
+LIN Xprp2 
+;ENDFOLD
+
+; taking air in order not to avoid the hooks opening 
+;FOLD SYN OUT 1 'Finger_right'  State= TRUE  at END  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:1, 3:Finger_right, 5:TRUE, 7:1, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=1 DELAY=1500 DO $OUT[1]=TRUE
+;ENDFOLD
+;FOLD SYN OUT 3 'Finger_left'  State= TRUE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:3, 3:Finger_left, 5:TRUE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[3]=TRUE
+;ENDFOLD
+
+; opening the hooks
+;FOLD SYN OUT 5 'All_hooks'  State= TRUE  at END  Delay= 500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:5, 3:All_hooks, 5:TRUE, 7:1, 9:0, 12:500
+TRIGGER WHEN DISTANCE=1 DELAY=500 DO $OUT[5]=TRUE
+;ENDFOLD
+
+; moving to the point above pallet pick place
+;FOLD LIN prp3  Vel=2.00000 m/s CPDAT3 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:prp3, 3:, 5:2.00000, 7:CPDAT3
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT3
+FDAT_ACT=Fp3
+BAS(#CP_PARAMS,2.00000)
+LIN Xprp3 
+;ENDFOLD
+
+pallet_pick_point = XP4
+pallet_pick_point.z = pallet1_num * Z_pallet - low_z_pallet_pick ; calculation of the pick point coordinates according to number of pallets
+
+; sinking to the pick point
+;FOLD LIN pallet_pick_point  Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:pallet_pick_point, 3:, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2.00000)
+LIN Xpallet_pick_point 
+;ENDFOLD
+
+; movement relative to the actual_pick_point_1 to the defined length down
+;FOLD OUT 5 'all hooks'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:5, 3:all hooks, 5:FALSE, 6:
+
+$OUT[5]=FALSE
+;ENDFOLD
+
+prp1 = pallet_pick_point
+prp1.z = prp1.z + 200 ; rising up to the defined length
+
+;FOLD LIN prp1 CONT Vel=2.00000 m/s CPDAT5 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:prp1, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT5
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT5
+FDAT_ACT=Fprp1
+BAS(#CP_PARAMS,2.00000)
+LIN Xprp1 C_DIS C_DIS
+;ENDFOLD
+
+;calculation of the coordinates of the retreat points
+XP5.z = pallet_pick_point.z
+XP6.z = pallet_pick_point.z
+
+; retreat to the approach points
+;FOLD LIN P5 CONT Vel=2.00000 m/s CPDAT5 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P5, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT5
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT5
+FDAT_ACT=FP5
+BAS(#CP_PARAMS,2.00000)
+LIN XP5 C_DIS C_DIS
+;ENDFOLD
+;FOLD PTP P6 CONT Vel=100 % PDAT6 Tool[4]:tool_pallet Base[1]:PickPallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:P6, 3:C_PTP, 5:100, 7:PDAT6
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT6
+FDAT_ACT=FP6
+BAS(#PTP_PARAMS,100)
+PTP XP6 C_PTP
+;ENDFOLD
+
+ENDIF
+ENDIF
+ENDIF
+
+END

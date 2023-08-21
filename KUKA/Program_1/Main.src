@@ -1,0 +1,381 @@
+&ACCESS RVP
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+DEF Main_003( )
+DECL INT ib1, ib2, flag_pallet_pick_number
+;ip, ib - counters of the current cycle
+;flag_pallet_pick_number - flag of the number of place where the pallet was picked (1 or 2)
+DECL INT pallet1_num, pallet1_num_init, current_box_layer_side1, current_pallet_layer1, pallet2_num, pallet2_num_init, current_box_layer_side2, current_pallet_layer2
+;pallet1_num - number of avaliable pallets at place 1
+;pallet1_num_init - initial number of avaliable pallets at place 1
+;current_box_layer1 - number of the current layer of boxes at place 1
+;current_box_layer_side1 - number of the side of the placed boxes at place 1. 1 - right side, 2 - left side
+;current_pallet_layer1 - number of the current layer of pallets at place 1
+;pallet2_num - number of avaliable pallets at place 2
+;pallet2_num_init - iitial number of avaliable pallets at place 2
+;current_box_layer2 - number of the current layer of boxes at place 2
+;current_box_layer_side2 - number of the side of the placed boxes at place 2. 1 - right side, 2 - left side
+;current_pallet_layer2 - number of the current layer of pallets at place 2
+DECL INT target_layers_number_1, target_layers_number_2 ; target number of layers of the boxes at places 1 and 2
+DECL INT X_box, Y_box, Z_box, Z_washer, Kz_washer1, Kz_washer2, Z_pallet
+DECL POS Ppickpallet1, Ppalletapproach1, Pplacepallet1, Pplacepalletapproach1, Ppickbox1, Ppickboxappr1   
+;Ppalletapproach1, Pplacejpalletapproach1, Ppickboxappr1 - approach points 
+DECL POS Ppickpallet2, Ppalletapproach2, Pplacepallet2, Pplacepalletapproach2, Ppickbox2, Ppickboxappr2
+
+;FOLD INI;%{PE}
+  ;FOLD BASISTECH INI
+    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+    INTERRUPT ON 3 
+    BAS (#INITMOV,0 )
+  ;ENDFOLD (BASISTECH INI)
+  ;FOLD USER INI
+    ;Make your modifications here
+
+  ;ENDFOLD (USER INI)
+;ENDFOLD (INI)
+
+INTERRUPT DECL 10 WHEN External_Hold DO STOP2 ( )
+INTERRUPT ON 10
+
+;velocity coefficients
+$VEL.CP = 1.0 ;m/s velocity of the robot (max 2.0)
+$OV_PRO = 100 ;% program velocity
+
+;Vel_without_load_lin = 2 ;velocity of movements without load, [m/s]
+;Vel_without_load_ptp = 100 ;velocity of movements without load, [%]
+;Vel_descent_pallet_search = 2 ;robot descent velocity during the pallet search, [m/s]
+;Vel_descent_pallet_grasp = 2 ;robot descent velocity to the pallet before grasping, [m/s]
+;Vel_ascent_with_pallet = 2 ;robot ascent velocity with pallet, [m/s]
+;Vel_with_pallet = 2 ;robot movements velocity with pallet, [m/s]
+;Vel_descent_with_pallet = 2 ;robot descent velocity with pallet before its placement, [m/s]
+;Vel_descent_with_pallet_placement = 2 ;robot descent velocity with pallet just before its placement, [m/s]
+;Vel_descent_to_boxes = 2 ;robot descent velocity to boxes before grasping, [m/s]
+;Vel_boxes_grasp = 2 ;robot velocity during grasping of boxes, [m/s]
+;Vel_with_boxes =2 ;robot movements velocity with boxes, [m/s]
+;Vel_descent_with_boxes = 2 ;robot descent velocity with boxes, [m/s]
+;Vel_descent_with_pallet_placement = 2 ;robot descent velocity with pallet just before its placement, [m/s]
+;Vel_descent_box_placement = 2 ;robot descent velocity with boxes beore placement, [m/s]
+;Vel_descent_with_pallet_placement = 2 ;robot descent velocity with pallet just before its placement, [m/s]
+;Vel_descent_washer_search = 2 ;robot descent velocity during washer search, [m/s]
+;Vel_with_washer = 2 ;robot movements velocity with washer, [m/s]
+;Vel_washer_placement = 2 ;robot velocity before washer placement, [m/s]
+;Vel_washer_take = 2 ;robot velocity before taking washer, [m/s]
+
+pallet1_num_init = 10 ;initial quantity of pallets at place 1
+pallet1_num = pallet1_num_init ;current quantity of pallets at place 1
+pallet2_num_init = 10 ;initial quantity of pallets at place 2
+pallet2_num = pallet2_num_init ;current quantity of pallets at place 2
+X_box = 395 ;length of the box, [mm]
+Y_box = 190 ;width of the box, [mm]
+Z_box = 122 ;height of the box, [mm]
+Z_washer = 20 ; height of the washer, [mm]
+Z_pallet = 200 ; height of the pallet, [mm]
+
+; Robot is near the HOME position
+WAIT FOR ($IN_HOME == FALSE)
+
+;FOLD PTP HOME  Vel= 100 % DEFAULT;%{PE}%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:HOME, 3:, 5:100, 7:DEFAULT
+$BWDSTART = FALSE
+PDAT_ACT=PDEFAULT
+FDAT_ACT=FHOME
+BAS (#PTP_PARAMS,100 )
+$H_POS=XHOME
+PTP  XHOME
+;ENDFOLD
+
+; wait for signal start program
+WAIT FOR (External_Start)
+
+LOOP
+
+current_pallet_layer1 = 1 ;number of the current layer of pallets at place point 1
+current_pallet_layer2 = 1 ;number of the current layer of pallets at place point 2
+current_box_layer1 = 1 ;number of the current layer of boxes at place point 1
+current_box_layer2 = 1 ;number of the current layer of boxes at place point 2
+current_box_layer_side1 = 1 ; 1 - left side of the boxes at place point 1, 2 - right side
+current_box_layer_side2 = 1 ; 1 - left side of the boxes at place point 2, 2 - right side
+Kz_washer1 = 0 ; number of placed washers at place 1
+Kz_washer2 = 0 ; number of placed washers at place 2
+
+; check the code of the product on the line 1
+IF (FLAG[6] == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Kod producta na linii 1 i programmy ne sovpadayut" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( FLAG[6]  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:FLAG[6], 6:1, 7:, 9:
+WAIT FOR  (  (FLAG[6]) ) 
+;ENDFOLD
+
+; check the code of the product on the line 2
+IF (FLAG[7] == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Kod producta na linii 2 i programmy ne sovpadayut" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( FLAG[7]  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:FLAG[7], 6:1, 7:, 9:
+WAIT FOR  (  (FLAG[7]) ) 
+;ENDFOLD
+
+; check the target number of layers from the controller
+IF (L1_Target_Layers > 10) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Zadano mnogo sloyev na meste 1" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ELSE
+IF (L1_Target_Layers == 0) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Zadano 0 sloyev na meste 1" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ENDIF
+ELSE
+IF (L1_Target_Layers > 7) THEN
+target_layers_number_1 = L1_Target_Layers * 2 + 2 ; for 2 washers and *2 for right and left sides
+ENDIF
+ELSE
+target_layers_number_1 = L1_Target_Layers * 2 + 1 ; for 2 washers and *2 for right and left sides
+ENDIF
+
+; check the target number of layers from the controller
+IF (L2_Target_Layers > 10) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Zadano mnogo sloyev na meste 2" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ELSE
+IF (L2_Target_Layers == 0) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Zadano 0 sloyev na meste 2" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ENDIF
+ELSE
+IF (L2_Target_Layers > 7) THEN
+target_layers_number_2 = L2_Target_Layers * 2 + 2 ; for 2 washers and *2 for right and left sides
+ENDIF
+ELSE
+target_layers_number_2 = L2_Target_Layers * 2 + 1 ; for 2 washers and *2 for right and left sides
+ENDIF
+
+FOR ip1 = 1 TO 2 ;cycles for placing 2 pallets at the right side
+
+;FOLD WAIT FOR ( L1_OK_to_Pick_Pallet  ) OR ( L2_OK_to_Pick_Pallet  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Pick_Pallet, 6:1, 7:, 9:OR, 10:, 12:, 13:L2_OK_to_Pick_Pallet, 14:1, 15:, 17:
+WAIT FOR  (  (L1_OK_to_Pick_Pallet) ) OR  (  (L2_OK_to_Pick_Pallet) ) 
+;ENDFOLD
+IF ((L1_OK_to_Pick_Pallet) AND (SA_L1_Pallet_Stack)) THEN
+flag_pallet_pick_number = 1
+pickpallet1(pallet1_num)
+pallet1_num = pallet1_num - 1
+ELSE
+IF ((L2_OK_to_Pick_Pallet) AND (SA_L2_Pallet_Stack)) THEN
+flag_pallet_pick_number = 2
+pickpallet2(pallet2_num)
+pallet2_num = pallet2_num - 1
+ENDIF
+ENDIF
+
+;FOLD WAIT FOR ( L1_OK_to_Place_Pallet  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Place_Pallet, 6:1, 7:, 9:
+WAIT FOR  (  (L1_OK_to_Place_Pallet) ) 
+;ENDFOLD
+IF ((L1_OK_to_Place_Pallet) AND (SA_L1_Pallet_Product))  THEN
+placepallet1(flag_pallet_pick_number, ip1, Z_pallet)
+ELSE
+ENDIF
+
+ENDFOR
+
+FOR ib1 = 1 to target_layers_number_1 ;cycles for placing 10 layers of boxes and one layer for washer at the right side
+
+; check signal from controller to free pallet 1
+IF (L1_Pallet_Eject_Req) THEN
+IF (ib1 <> target_layers_number_1) THEN
+L1_Pallet_Eject_Part = TRUE
+ELSE
+L1_Pallet_Eject_Full = TRUE
+ENDIF
+ib1 = target_layers_number_1
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+;FOLD WAIT FOR ( L1_Pallet_Eject_Ack  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_Pallet_Eject_Ack, 6:1, 7:, 9:
+WAIT FOR  (  (L1_Pallet_Eject_Ack) ) 
+;ENDFOLD
+ELSE
+
+IF (ib1 == 1) OR (ib1 == 16) THEN
+;FOLD WAIT FOR ( OK_to_Pick_Sheet  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:OK_to_Pick_Sheet, 6:1, 7:, 9:
+WAIT FOR  (  (OK_to_Pick_Sheet) ) 
+;ENDFOLD
+pickwasher()
+;FOLD WAIT FOR ( L1_OK_to_Place_Sheet  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Place_Sheet, 6:1, 7:, 9:
+WAIT FOR  (  (L1_OK_to_Place_Sheet) ) 
+;ENDFOLD
+IF (L1_OK_to_Place_Sheet) THEN
+placewasher1(current_box_layer1, Z_pallet)
+Kz_washer1 = Kz_washer1 + 1
+ELSE
+ENDIF
+
+ELSE
+
+;FOLD WAIT FOR ( L1_OK_to_Pick_Product  ) OR ( L2_OK_to_Pick_Product  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Pick_Product, 6:1, 7:, 9:OR, 10:, 12:, 13:L2_OK_to_Pick_Product, 14:1, 15:, 17:
+WAIT FOR  (  (L1_OK_to_Pick_Product) ) OR  (  (L2_OK_to_Pick_Product) ) 
+;ENDFOLD
+IF (L1_OK_to_Pick_Product) THEN
+pickbox1(X_box)
+ELSE
+IF (L2_OK_to_Pick_Product) THEN
+pickbox2(X_box)
+ENDIF
+ENDIF
+
+;FOLD WAIT FOR ( L1_OK_to_Place_Product  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Place_Product, 6:1, 7:, 9:
+WAIT FOR  (  (L1_OK_to_Place_Product) ) 
+;ENDFOLD
+IF ((L1_OK_to_Place_Product) AND (SA_L1_Pallet_Product)) THEN
+placebox1(current_box_layer1, current_box_layer_side1, X_box, Z_box, Z_washer, Kz_washer1, Z_pallet)
+IF current_box_layer_side1 == 1 THEN
+current_box_layer_side1 = 2
+ELSE
+current_box_layer_side1 = 1
+current_box_layer1 = current_box_layer1 + 1
+ENDIF
+ENDIF
+ENDIF
+
+ENDIF
+
+ENDFOR
+
+
+
+FOR ip2 = 1 TO 2 ;cycles for placing 2 pallets at the left side
+
+;FOLD WAIT FOR ( L1_OK_to_Pick_Pallet  ) OR ( L2_OK_to_Pick_Pallet  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Pick_Pallet, 6:1, 7:, 9:OR, 10:, 12:, 13:L2_OK_to_Pick_Pallet, 14:1, 15:, 17:
+WAIT FOR  (  (L1_OK_to_Pick_Pallet) ) OR  (  (L2_OK_to_Pick_Pallet) ) 
+;ENDFOLD
+IF ((L1_OK_to_Pick_Pallet) AND (SA_L1_Pallet_Stack)) THEN
+flag_pallet_pick_number = 1
+pickpallet1(pallet1_num)
+pallet1_num = pallet1_num - 1
+ELSE
+IF ((L2_OK_to_Pick_Pallet) AND (SA_L2_Pallet_Stack)) THEN
+flag_pallet_pick_number = 2
+pickpallet2(pallet2_num)
+pallet2_num = pallet2_num - 1
+ENDIF
+ENDIF
+
+;FOLD WAIT FOR ( L2_OK_to_Place_Pallet  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_OK_to_Place_Pallet, 6:1, 7:, 9:
+WAIT FOR  (  (L2_OK_to_Place_Pallet) ) 
+;ENDFOLD
+IF ((L2_OK_to_Place_Pallet) AND (SA_L2_Pallet_Product))  THEN
+placepallet2(flag_pallet_pick_number, ip2, Z_pallet)
+ENDIF
+
+ENDFOR
+
+FOR ib2 = 1 to target_layers_number_2 ;cycles for placing 10 layers of boxes and one layer for washer at the left side
+
+; check signal from controller to free pallet 1
+IF (L2_Pallet_Eject_Req) THEN
+IF (ib2 <> target_layers_number_2) THEN
+L2_Pallet_Eject_Part = TRUE
+ELSE
+L2_Pallet_Eject_Full = TRUE
+ENDIF
+ib2 = target_layers_number_2
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+;FOLD WAIT FOR ( L2_Pallet_Eject_Ack  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_Eject_Ack, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_Eject_Ack) ) 
+;ENDFOLD
+ELSE
+
+IF (ib2 == 1) OR (ib2 == 16) THEN
+;FOLD WAIT FOR ( OK_to_Pick_Sheet  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:OK_to_Pick_Sheet, 6:1, 7:, 9:
+WAIT FOR  (  (OK_to_Pick_Sheet) ) 
+;ENDFOLD
+pickwasher()
+;FOLD WAIT FOR ( L2_OK_to_Place_Sheet  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_OK_to_Place_Sheet, 6:1, 7:, 9:
+WAIT FOR  (  (L2_OK_to_Place_Sheet) ) 
+;ENDFOLD
+IF (L2_OK_to_Place_Sheet) THEN
+placewasher2(current_box_layer2, Z_pallet)
+Kz_washer2 = Kz_washer2 + 1
+ENDIF
+ENDIF
+
+ELSE
+
+;FOLD WAIT FOR ( L1_OK_to_Pick_Product  ) OR ( L2_OK_to_Pick_Product  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L1_OK_to_Pick_Product, 6:1, 7:, 9:OR, 10:, 12:, 13:L2_OK_to_Pick_Product, 14:1, 15:, 17:
+WAIT FOR  (  (L1_OK_to_Pick_Product) ) OR  (  (L2_OK_to_Pick_Product) ) 
+;ENDFOLD
+IF (L1_OK_to_Pick_Product) THEN
+pickbox1(X_box)
+ELSE
+IF (L2_OK_to_Pick_Product) THEN
+pickbox2(X_box)
+ENDIF
+ENDIF
+
+;FOLD WAIT FOR ( L2_OK_to_Place_Product  );%{PE}%R 5.4.33,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_OK_to_Place_Product, 6:1, 7:, 9:
+WAIT FOR  (  (L2_OK_to_Place_Product) ) 
+;ENDFOLD
+IF ((L2_OK_to_Place_Product) AND (SA_L2_Pallet_Product )) THEN
+placekbox2(current_box_layer2, current_box_layer_side2, X_box, Z_box, Z_washer, Kz_washer2, Z_pallet)
+IF current_box_layer_side2 == 1 THEN
+current_box_layer_side2 = 2
+ELSE
+current_box_layer_side2 = 1
+current_box_layer2 = current_box_layer2 + 1
+ENDIF
+ENDIF
+ENDIF
+
+ENDFOR
+
+
+
+IF pallet1_num = 0 THEN
+pallet1_num = pallet1_num_init
+ENDIF
+IF pallet2_num = 0 THEN
+pallet2_num = pallet2_num_init
+ENDIF
+
+ENDLOOP
+
+;FOLD PTP HOME  Vel= 100 % DEFAULT;%{PE}%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:HOME, 3:, 5:100, 7:DEFAULT
+$BWDSTART = FALSE
+PDAT_ACT=PDEFAULT
+FDAT_ACT=FHOME
+BAS (#PTP_PARAMS,100 )
+$H_POS=XHOME
+PTP  XHOME
+;ENDFOLD
+
+END
