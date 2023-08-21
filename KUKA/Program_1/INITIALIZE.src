@@ -1,0 +1,44 @@
+&ACCESS RVO1
+&COMMENT 
+DEF INITIALIZE()
+
+;FOLD INI
+  ;FOLD BASISTECH INI
+    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+    INTERRUPT ON 3 
+    BAS (#INITMOV,0 )
+  ;ENDFOLD (BASISTECH INI)
+  ;FOLD USER INI
+    ;Make your modifications here
+
+  ;ENDFOLD (USER INI)
+;ENDFOLD (INI)
+; initial state of the gripper
+Blow = TRUE
+;FOLD WAIT Time= 1 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:1
+WAIT SEC 1
+;ENDFOLD
+Blow = FALSE
+Vacuum_on = FALSE
+Vacuum_cups = FALSE
+IF ((All_hooks == TRUE) AND ((Finger_right == TRUE) OR (Finger_left == TRUE))) THEN
+Finger_right = FALSE
+Finger_left = FALSE
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+ENDIF
+All_hooks = FALSE
+Support_hook_right = FALSE
+Support_hook_left = FALSE
+
+;velocity coefficients
+IF (Safety_Speed) THEN
+$VEL.CP = 0.25 ;m/s velocity of the robot (max 2.0)
+ELSE
+$VEL.CP = 1.0 ;m/s velocity of the robot (max 2.0)
+ENDIF
+
+$OV_PRO = 100 ;% program velocity
+
+END

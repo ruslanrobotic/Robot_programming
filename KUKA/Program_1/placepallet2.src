@@ -1,0 +1,302 @@
+&ACCESS RVO1
+&COMMENT 
+&ACCESS RVP
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\Program
+DEF place_pallet2(flag_pallet_pick_number:in, ip:in, Z_pallet:in)
+decl int flag_pallet_pick_number, ip ; number of pallet pick place and ip - number of the current layer of pallets
+DECL INT Z_pallet
+DECL pos puklpallet, retreat_1_point
+
+; check if there is a requirement to enter the zone from the operator
+IF (Entry_Request) THEN
+Go_home()
+BRAKE
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+HALT
+ENDIF
+
+If (flag_pallet_pick_number == 2) then
+; if the pallet was taken from the 1 place, then movement along the lower trajectory
+
+; movement down in the direction to the pallet place point
+;FOLD LIN P1  Vel=2 m/s CPDAT0 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P1, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP1
+BAS(#CP_PARAMS,2)
+LIN XP1 
+;ENDFOLD
+
+; movement to the point above the pallet place point
+;FOLD LIN P2 CONT Vel=2.00000 m/s CPDAT2 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT2
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT2
+FDAT_ACT=FP2
+BAS(#CP_PARAMS,2.00000)
+LIN XP2 C_DIS C_DIS
+;ENDFOLD
+
+; coordinates calculation and movement down to place point
+xpuklpallet = XP3
+xpuklpallet.z = xpuklpallet.z + Z_pallet * (ip - 1)
+;FOLD LIN puklpallet Vel=2 m/s CPDAT1 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.32,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:puklpallet, 3:, 5:2, 7:CPDAT1
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT1
+FDAT_ACT=Fpuklpallet
+BAS(#CP_PARAMS,2)
+LIN Xpuklpallet 
+;ENDFOLD
+
+;FOLD OUT 5 'all hooks'  State= TRUE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:5, 3:all hooks, 5:TRUE, 6:
+
+$OUT[5]=TRUE
+;ENDFOLD
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+
+L1_Pallet_Placed = TRUE
+
+xpuklpallet.z = xpuklpallet.z + 400
+
+; check signals from sensors that lower or upper pallets are set
+IF (ip == 1) THEN
+IF (L2_Pallet_1_present == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net signala s datchika, chto nizhn'aya palleta ustanovlena" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_1_present  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_1_present, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_1_present) ) 
+;ENDFOLD
+ELSE
+IF ((ip == 2) AND (L2_Pallet_2_present == FALSE)) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net signala s datchika, chto verkhn'aya palleta ustanovlena" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_2_present  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_2_present, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_2_present) ) 
+;ENDFOLD
+ENDIF
+
+;check for signal from sensors that upper pallet is free
+IF (L2_Pallet_2_clear == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net signala s datchika, chto ustanovlennaya verkhn'aya palleta svobodna" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( NOT L2_Pallet_2_clear  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:NOT, 5:L2_Pallet_2_clear, 6:1, 7:, 9:
+WAIT FOR  ( NOT (L2_Pallet_2_clear) ) 
+;ENDFOLD
+
+;check for allowance to leave the place point zone
+IF L1_Pallet_Detected == FALSE THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net razresheniya pokinut' zonu ukladki pallet" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_Detected  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_Detected, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_Detected) ) 
+;ENDFOLD
+L1_Pallet_Placed = FALSE ; reset the signal
+
+; movement up
+;FOLD LIN P4 CONT Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P4, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2.00000)
+LIN XP4 C_DIS C_DIS
+;ENDFOLD
+
+; opening of the hooks
+;FOLD SYN OUT 5 'All_hooks'  State= FALSE  at END  Delay= 500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:5, 3:All_hooks, 5:FALSE, 7:1, 9:0, 12:500
+TRIGGER WHEN DISTANCE=1 DELAY=500 DO $OUT[5]=FALSE
+;ENDFOLD
+
+; opening of the gripper when the hooks were opened 
+;FOLD SYN OUT 1 'Finger_right'  State= FALSE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:1, 3:Finger_right, 5:FALSE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[1]=FALSE
+;ENDFOLD
+;FOLD SYN OUT 3 'Finger_left'  State= FALSE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:3, 3:Finger_left, 5:FALSE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[3]=FALSE
+;ENDFOLD
+
+;FOLD PTP home  Vel=100 % PDAT5 Tool[2]:tool_empty Base[0];%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:home, 3:, 5:100, 7:PDAT5
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT5
+FDAT_ACT=Fhome
+BAS(#PTP_PARAMS,100)
+PTP Xhome 
+;ENDFOLD
+
+
+
+
+ELSE
+; if the pallet was taken from the 2 place, then movement along the upper trajectory
+retreat_1_point = $POS_ACT
+retreat_1_point.z = 400
+
+;  movement to the pallet place point 1 around the pedestal
+;FOLD CIRC Home P1  Vel=2 m/s CPDAT1 Tool[0] Base[0];%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VCIRC,%P 1:CIRC, 2:Home, 3:P1, 4:, 6:2, 8:CPDAT1
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT1
+FDAT_ACT=FP1
+BAS(#CP_PARAMS,2)
+CIRC XHome, XP1 
+;ENDFOLD
+
+; movement down in the direction to the pallet place point
+;FOLD LIN P1  Vel=2 m/s CPDAT0 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P1, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP1
+BAS(#CP_PARAMS,2)
+LIN XP1 
+;ENDFOLD
+
+; movement to the point above the pallet place point
+;FOLD LIN P2 CONT Vel=2.00000 m/s CPDAT2 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT2
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT2
+FDAT_ACT=FP2
+BAS(#CP_PARAMS,2.00000)
+LIN XP2 C_DIS C_DIS
+;ENDFOLD
+
+; coordinates calculation and movement down to place point
+puklpallet = XP3
+xpuklpallet.z = xpuklpallet.z + Z_pallet * (ip - 1)
+;FOLD LIN puklpallet Vel=2 m/s CPDAT1 Tool[4]:tool_pallet Base[2]:plpallet1;%{PE}%R 8.3.32,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:puklpallet, 3:, 5:2, 7:CPDAT1
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT1
+FDAT_ACT=Fpuklpallet
+BAS(#CP_PARAMS,2)
+LIN Xpuklpallet 
+;ENDFOLD
+
+;FOLD OUT 5 'all hooks'  State= TRUE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:5, 3:all hooks, 5:TRUE, 6:
+
+$OUT[5]=TRUE
+;ENDFOLD
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+
+L1_Pallet_Placed = TRUE
+
+xpuklpallet.z = xpuklpallet.z + 400
+
+; check signals from sensors that lower or upper pallets are set
+IF (ip == 1) THEN
+IF (L1_Pallet_1_present == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net signala s datchika, chto nizhn'aya palleta ustanovlena" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_1_present  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_1_present, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_1_present) ) 
+;ENDFOLD
+ELSE
+IF ((ip == 2) AND (L2_Pallet_2_present == FALSE)) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net signala s datchika, chto verkhn'aya palleta ustanovlena" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_2_present  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_2_present, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_2_present) ) 
+;ENDFOLD
+ENDIF
+
+;check for signal from sensors that upper pallet is free
+IF (L2_Pallet_2_clear == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net signala s datchika, chto ustanovlennaya verkhn'aya palleta svobodna" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( NOT L2_Pallet_2_clear  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:NOT, 5:L2_Pallet_2_clear, 6:1, 7:, 9:
+WAIT FOR  ( NOT (L2_Pallet_2_clear) ) 
+;ENDFOLD
+
+;check for allowance to leave the place point zone
+IF (L2_Pallet_Detected == FALSE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net razresheniya pokinut' zonu ukladki pallet" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_Detected  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_Detected, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_Detected) ) 
+;ENDFOLD
+L2_Pallet_Placed = FALSE ; reset the signal
+
+; movement up
+;FOLD LIN P4 CONT Vel=2.00000 m/s CPDAT4 Tool[2]:tool_empty Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P4, 3:C_DIS C_DIS, 5:2.00000, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2.00000)
+LIN XP4 C_DIS C_DIS
+;ENDFOLD
+
+; opening of the hooks
+;FOLD SYN OUT 5 'All_hooks'  State= FALSE  at END  Delay= 500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:5, 3:All_hooks, 5:FALSE, 7:1, 9:0, 12:500
+TRIGGER WHEN DISTANCE=1 DELAY=500 DO $OUT[5]=FALSE
+;ENDFOLD
+
+; opening of the gripper when the hooks were opened 
+;FOLD SYN OUT 1 'Finger_right'  State= FALSE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:1, 3:Finger_right, 5:FALSE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[1]=FALSE
+;ENDFOLD
+;FOLD SYN OUT 3 'Finger_left'  State= FALSE  at START  Delay= 1500 ms;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VSYNOUT,%P 2:3, 3:Finger_left, 5:FALSE, 7:0, 9:0, 12:1500
+TRIGGER WHEN DISTANCE=0 DELAY=1500 DO $OUT[3]=FALSE
+;ENDFOLD
+
+;FOLD PTP home  Vel=100 % PDAT5 Tool[2]:tool_empty Base[0];%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:home, 3:, 5:100, 7:PDAT5
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT5
+FDAT_ACT=Fhome
+BAS(#PTP_PARAMS,100)
+PTP Xhome 
+;ENDFOLD
+
+ENDIF
+
+END

@@ -1,0 +1,270 @@
+&ACCESS  RVO
+&COMMENT PLC on control
+DEF  SPS ( )
+  ;FOLD DECLARATIONS
+  ;FOLD BASISTECH DECL
+  ;Automatik extern
+  DECL STATE_T STAT
+  DECL MODUS_T MODE
+  ;ENDFOLD (BASISTECH DECL)
+  ;FOLD USER DECL
+  ; Please insert user defined declarations
+
+  ;ENDFOLD (USER DECL)
+  ;ENDFOLD (DECLARATIONS)
+  ;FOLD INI
+  ;Default value MSG_T
+  $MSG_T={MSG_T: VALID FALSE,RELEASE FALSE,TYP #NOTIFY,MODUL[] " ",KEY[] " ",PARAM_TYP #VALUE,PARAM[] " ",DLG_FORMAT[] " ",ANSWER 0}
+  ;FOLD AUTOEXT INIT
+  INTERRUPT DECL 91 WHEN $PRO_STATE1==#P_FREE DO RESET_OUT ()
+  INTERRUPT ON 91
+  $LOOP_MSG[]="                                                            "
+  MODE=#SYNC
+  $H_POS=$H_POS
+  ;Automatik extern
+  IF $MODE_OP==#EX THEN
+    CWRITE($CMD,STAT,MODE,"RUN /R1/CELL()")
+  ENDIF
+  ;ENDFOLD (AUTOEXT INIT)
+  ;FOLD USER INIT
+  ; Please insert user defined initialization commands
+
+  ;ENDFOLD (USER INIT)
+  ;ENDFOLD (INI)
+
+  LOOP
+     WAIT FOR NOT($POWER_FAIL)
+     TORQUE_MONITORING()
+
+    ;FOLD USER PLC
+    ;Make your modifications here
+    
+    ; heartbeat signal
+    Network_HB_Echo = Network_Heart_Beat
+    
+    ; zones and flags, which indicate if the robot is in these zones or not
+    ; zone around the pallet pick point 1
+    IF (($POS_ACT.x > 1200) AND ($POS_ACT.x < 1400) AND ($POS_ACT.y > 1200) AND ($POS_ACT.y < 1400) AND ($POS_ACT.z > 0) AND ($POS_ACT.z < 1000)) THEN
+    FLAG[1] = TRUE
+    SA_L1_Pallet_Stack = FALSE
+    ELSE 
+    FLAG[1] = FALSE
+    SA_L1_Pallet_Stack = TRUE
+    ENDIF
+    ; zone around the place point 1
+    IF (($POS_ACT.x > 1200) AND ($POS_ACT.x < 1400) AND ($POS_ACT.y > 1200) AND ($POS_ACT.y < 1400) AND ($POS_ACT.z > 0) AND ($POS_ACT.z < 1000)) THEN
+    FLAG[2] = TRUE
+    SA_L1_Pallet_Product = FALSE
+    ELSE
+    FLAG[2] = FALSE
+    SA_L1_Pallet_Product = TRUE
+    ENDIF
+    ; zone around the pallet pick point 2
+    IF (($POS_ACT.x > 1200) AND ($POS_ACT.x < 1400) AND ($POS_ACT.y > 1200) AND ($POS_ACT.y < 1400) AND ($POS_ACT.z > 0) AND ($POS_ACT.z < 1000)) THEN
+    FLAG[3] = TRUE
+    SA_L2_Pallet_Stack = FALSE
+    ELSE
+    FLAG[3] = FALSE
+    SA_L2_Pallet_Stack = TRUE
+    ENDIF
+    ; zone around the place point 2
+    IF (($POS_ACT.x > 1200) AND ($POS_ACT.x < 1400) AND ($POS_ACT.y > 1200) AND ($POS_ACT.y < 1400) AND ($POS_ACT.z > 0) AND ($POS_ACT.z < 1000)) THEN
+    FLAG[4] = TRUE
+    SA_L2_Pallet_Product = FALSE
+    ELSE
+    FLAG[4] = FALSE
+    SA_L2_Pallet_Product = TRUE
+    ENDIF
+    
+    ; zone around the box pick point 1
+    IF (($POS_ACT.x > 1200) AND ($POS_ACT.x < 1400) AND ($POS_ACT.y > 1200) AND ($POS_ACT.y < 1400) AND ($POS_ACT.z > 0) AND ($POS_ACT.z < 1000)) THEN
+    FLAG[8] = TRUE
+    SA_L1_PickPoint = FALSE
+    ELSE
+    FLAG[8] = FALSE
+    SA_L1_PickPoint = TRUE
+    ENDIF
+    ; zone around the box pick point 2
+    IF (($POS_ACT.x > 1200) AND ($POS_ACT.x < 1400) AND ($POS_ACT.y > 1200) AND ($POS_ACT.y < 1400) AND ($POS_ACT.z > 0) AND ($POS_ACT.z < 1000)) THEN
+    FLAG[9] = TRUE
+    SA_L2_PickPoint = FALSE
+    ELSE
+    FLAG[9] = FALSE
+    SA_L2_PickPoint = TRUE
+    ENDIF
+
+    ; check allowances for the robot to be in the zones. If there is no allowance then pause the program and show a message
+    ; zone around the pallet pick point 1
+    IF ((SA_L1_Pallet_Stack <> TRUE) AND (FLAG[1] = TRUE)) THEN
+    BRAKE
+    WAIT SEC 0
+    HALT
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net razresheniya dvizheniya v zone vzyatiya pallet 1" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+    ENDIF    
+    ; zone around the place point 1
+    IF ((SA_L1_Pallet_Product <> TRUE) AND (FLAG[2] = TRUE)) THEN
+    BRAKE
+    WAIT SEC 0
+    HALT
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net razresheniya dvizheniya v zone ukladki 1" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+    ENDIF  
+    ; zone around the pallet pick point 2
+    IF ((SA_L2_Pallet_Stack <> TRUE) AND (FLAG[3] = TRUE)) THEN
+    BRAKE
+    WAIT SEC 0
+    HALT
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net razresheniya dvizheniya v zone vzyatiya pallet 2" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+    ENDIF    
+    ; zone around the place point 2
+    IF ((SA_L2_Pallet_Product <> TRUE) AND (FLAG[4] = TRUE)) THEN
+    BRAKE
+    WAIT SEC 0
+    HALT
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Net razresheniya dvizheniya v zone ukladki 2" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+    ENDIF
+    
+    ; check the pallets at the pallet pick place. Set flag to 0 if the number of pallets was changed (when the door was opened)
+    IF (SA_Sheet_Stack == FALSE) THEN 
+    FLAG[5] = FALSE
+    ELSE
+    FLAG[5] = TRUE
+    ENDIF
+    
+    IF (Main_Routine_Call) THEN
+    $PRO_STATE = #P_RESET
+    ENDIF 
+    
+    IF Go_Home_Req THEN
+    Go_home()
+    Home_Pos = TRUE
+    HALT
+    ENDIF
+    
+    IF Go_Maint_Req THEN
+    Go_service()
+    Maint_Pos = TRUE
+    HALT
+    ENDIF
+    
+    IF (L1_Prod_Code <> Line1_prod_code) THEN
+    FLAG[6] = FALSE
+    ELSE
+    FLAG[6] = TRUE
+    ENDIF
+    
+    IF (L2_Prod_Code <> Line2_prod_code) THEN
+    FLAG[7] = FALSE
+    ELSE
+    FLAG[7] = TRUE
+    ENDIF
+    
+    L1vel = L1_Speed_Override / 100
+    L2ve2 = L1_Speed_Override / 100
+    
+    L1_Pallet_Product_Count = current_box_layer1
+    L2_Pallet_Product_Count = current_box_layer2
+    
+    L1_Pallet_Stack_Height = ip1
+    L2_Pallet_Stack_Height = ip2
+    
+    L1_Prod_Echo_Byte = Line1_prod_code
+    L2_Prod_Echo_Byte = Line2_prod_code
+    
+    L1_Pallet_Layers_Count = current_box_layer1 - 1
+    L2_Pallet_Layers_Count = current_box_layer2 - 1
+    
+    IF ($PRO_STATE == #P_ACTIVE) THEN
+    Robot_Running = TRUE
+    ELSE
+    Robot_Running = FALSE
+    ENDIF
+    
+    IF ($PRO_STATE == #P_RESET) THEN
+    Top_Main = TRUE
+    ELSE
+    Top_Main = FALSE
+    ENDIF
+    
+    IF ($ALARM_STOP) THEN
+    Robot_Alarm = TRUE
+    ELSE
+    Robot_Alarm = FALSE
+    ENDIF
+    
+    IF ($MODE_OP == #EX) THEN
+    Remote_Mode = TRUE
+    ELSE
+    Remote_Mode = FALSE
+    ENDIF
+    
+    IF ($MODE_OP == #T1) THEN
+    Teach_Mode = TRUE
+    ELSE
+    Teach_Mode = FALSE
+    ENDIF
+    
+    IF ($IN_HOME == TRUE) THEN
+    Home_Pos = TRUE
+    ELSE
+    Home_Pos = FALSE
+    ENDIF
+
+    
+    
+    
+    
+   ENDLOOP
+
+    ;ENDFOLD (USER PLC)
+  ;FOLD ;%{H}
+  ;FOLD
+END
+  ;ENDFOLD
+
+
+DEF  RESET_OUT ( )
+  INT N
+  MsgLoop(" ")
+  IF REFLECT_PROG_NR == 1 THEN
+    FOR N = 0 TO PGNO_LENGTH - 1
+      $OUT[PGNO_FBIT_REFL + N] = FALSE
+    ENDFOR
+  ENDIF
+  IF (PGNO_REQ>0) THEN
+    $OUT[PGNO_REQ]=FALSE
+  ELSE
+    IF (PGNO_REQ<0) THEN
+      $OUT[-PGNO_REQ]=TRUE
+    ENDIF
+  ENDIF
+END
+
+;FOLD USER SUBROUTINE
+; Integrate your user defined subroutines
+
+;ENDFOLD (USER SUBROUTINE)
+;ENDFOLD

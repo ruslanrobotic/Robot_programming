@@ -1,0 +1,186 @@
+&ACCESS RVO1
+&COMMENT 
+&ACCESS RVP
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\Program
+DEF placebox2(current_box_layer1:in, current_box_layer_side1:in, X_box:in, Z_box:in, Z_washer:in, Kz_washer1:in, Z_pallet:in)
+decl int current_box_layer1, current_box_layer_side1, X_box, Z_box, Z_washer, Kz_washer1, Z_pallet 
+;current_box_layer1 - number of the current layer of boxes at place 1
+;current_box_layer_side1 - number of the side of the placed boxes at place 1. 1 - right side, 2 - left side
+;X_box - length of the box, [mm]
+del pos XP1m, XP2m, XP3m
+
+; check if there is a requirement to enter the zone from the operator
+IF (Entry_Request) THEN
+Go_home()
+BRAKE
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+HALT
+ENDIF
+
+XP1m = XP1
+XP2m = XP2
+XP2m.z = XP2.z + Z_pallet*2 ; 200 - height of one pallet
+; calculation of Z coordinates of the current layer
+XP2m.z = XP2m.z + Z_washer * Kz_washer1 + Z_box * (current_box_layer1 - 1)
+XP3m = XP2m
+XP3m.z = XP2m.z + 200
+
+; movement to the right or to the left side of the place point
+IF (current_box_layer_side1 == 1) THEN
+; right side
+; calculation of coordinates
+XP1m.C = 180
+; movement to the point above the place point
+;FOLD LIN P1m  Vel=2 m/s CPDAT0 Tool[3]:tool_2_box Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P1m, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP1m
+BAS(#CP_PARAMS,2)
+LIN XP1m 
+;ENDFOLD
+XP2m.C = 180
+; movement down to the place point
+;FOLD LIN P2m  Vel=2 m/s CPDAT0 Tool[3]:tool_2_box Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2m, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP2m
+BAS(#CP_PARAMS,2)
+LIN XP2m 
+;ENDFOLD
+
+; take off the support
+;FOLD OUT 2 'support hook right'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:2, 3:support hook right, 5:FALSE, 6:
+
+$OUT[2]=FALSE
+;ENDFOLD
+;FOLD OUT 4 'support hook left'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:4, 3:support hook left, 5:FALSE, 6:
+
+$OUT[4]=FALSE
+;ENDFOLD
+;FOLD WAIT Time=1 sec;%{PE}%R 8.3.32,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 3:1
+WAIT SEC 1
+;ENDFOLD
+
+; take off the boxes
+;FOLD OUT 1 'finger right'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:1, 3:finger right, 5:FALSE, 6:
+
+$OUT[1]=FALSE
+;ENDFOLD
+;FOLD OUT 3 'finger left'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:3, 3:finger left, 5:FALSE, 6:
+
+$OUT[3]=FALSE
+;ENDFOLD
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+
+XP3m.C = 180
+; movement up
+;FOLD LIN P3m  Vel=2 m/s CPDAT0 Tool[2]:tool_empty Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P3m, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP3m
+BAS(#CP_PARAMS,2)
+LIN XP3m 
+;ENDFOLD
+
+ELSE
+IF (current_box_layer_side2 == 2) THEN
+; left side
+; calculation of coordinates
+XP1m.C = -180
+XP1m.y = XP1m.y - 200
+; movement to the point above the place point
+;FOLD LIN P1m  Vel=2 m/s CPDAT0 Tool[3]:tool_2_box Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P1m, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP1m
+BAS(#CP_PARAMS,2)
+LIN XP1m 
+;ENDFOLD
+XP2m.C = -180
+XP2m.y = XP2m.y - 200
+; movement down to the place point
+;FOLD LIN P2m  Vel=2 m/s CPDAT0 Tool[3]:tool_2_box Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P2m, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP2m
+BAS(#CP_PARAMS,2)
+LIN XP2m 
+;ENDFOLD
+
+; take off the support
+;FOLD OUT 2 'support hook right'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:2, 3:support hook right, 5:FALSE, 6:
+
+$OUT[2]=FALSE
+;ENDFOLD
+;FOLD OUT 4 'support hook left'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:4, 3:support hook left, 5:FALSE, 6:
+
+$OUT[4]=FALSE
+;ENDFOLD
+;FOLD WAIT Time=1 sec;%{PE}%R 8.3.32,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 3:1
+WAIT SEC 1
+;ENDFOLD
+
+; take off the boxes
+;FOLD OUT 1 'finger right'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:1, 3:finger right, 5:FALSE, 6:
+
+$OUT[1]=FALSE
+;ENDFOLD
+;FOLD OUT 3 'finger left'  State= FALSE;%{PE}%R 8.3.22,%MKUKATPBASIS,%COUT,%VOUTX,%P 2:3, 3:finger left, 5:FALSE, 6:
+
+$OUT[3]=FALSE
+;ENDFOLD
+;FOLD WAIT Time= 0.5 sec;%{PE}%R 8.3.22,%MKUKATPBASIS,%CWAIT,%VWAIT,%P 2:0.5
+WAIT SEC 0.5
+;ENDFOLD
+
+XP3m.C = -180
+; movement up
+;FOLD LIN P3m  Vel=2 m/s CPDAT0 Tool[2]:tool_empty Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P3m, 3:, 5:2, 7:CPDAT0
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT0
+FDAT_ACT=FP3m
+BAS(#CP_PARAMS,2)
+LIN XP3m 
+;ENDFOLD
+
+ENDIF
+ENDIF
+
+;check for signal from sensors that upper pallet is now not free
+IF (L2_Pallet_2_clear == TRUE) THEN
+    $MSG_T.TYP = #quit
+    $MSG_T.KEY[]="Signal s datchika, chto verkhn'aya palleta na meste 1 svobodna" ;MSG
+    $MSG_T.VALID=TRUE ;vivvod MSG
+    ; wait for aknowledgement
+    WHILE  $MSG_T.VALID == true 
+    ; WAIT SEC 0.05
+    ENDWHILE 
+ENDIF
+;FOLD WAIT FOR ( L2_Pallet_2_clear  );%{PE}%R 8.3.22,%MKUKATPBASIS,%CEXT_WAIT_FOR,%VEXT_WAIT_FOR,%P 2:, 4:, 5:L2_Pallet_2_clear, 6:1, 7:, 9:
+WAIT FOR  (  (L2_Pallet_2_clear) ) 
+;ENDFOLD
+
+; movement up with rotation of the gripper
+;FOLD LIN P4  Vel=2 m/s CPDAT4 Tool[2]:tool_empty Base[2]:plpallet1;%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:P4, 3:, 5:2, 7:CPDAT4
+$BWDSTART=FALSE
+LDAT_ACT=LCPDAT4
+FDAT_ACT=FP4
+BAS(#CP_PARAMS,2)
+LIN XP4 
+;ENDFOLD
+
+;FOLD PTP home  Vel=100 % PDAT5 Tool[2]:tool_empty Base[0];%{PE}%R 8.3.22,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:home, 3:, 5:100, 7:PDAT5
+$BWDSTART=FALSE
+PDAT_ACT=PPDAT5
+FDAT_ACT=Fhome
+BAS(#PTP_PARAMS,100)
+PTP Xhome 
+;ENDFOLD
+
+END
